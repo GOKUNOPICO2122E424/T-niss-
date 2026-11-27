@@ -690,6 +690,8 @@ var savedJson=JSON.stringify(state);
 var dirty=0, canAdmin=false, api=null, busy=false, adminWhy='wait';
 var view={q:'',cat:'all',brands:[],size:null,maxPrice:null,avail:false,sort:'recent',open:false,tag:'',fav:false};
 var adm={tab:'prod',q:'',edit:null};
+var mpQueue=[];var mpGoal=20;var mpSearch='';
+try{mpQueue=JSON.parse(localStorage.getItem('tniss_mp_queue')||'[]');if(!Array.isArray(mpQueue))mpQueue=[];mpGoal=+(localStorage.getItem('tniss_mp_goal')||20)}catch(e){mpQueue=[]}
 var modal={id:null,sel:null};
 var favs=[];
 var HUES=[352,212,152,46,282,24,190];
@@ -1219,12 +1221,13 @@ function closeAdmin(){
   admEl.hidden=true;admEl.innerHTML='';lockOff();render();
 }
 function renderAdmin(){
-  var tabs=[['prod','Productos'],['cats','Secciones'],['car','Carrusel'],['shop','Tienda'],['fotos','Fotos']];
+  var tabs=[['prod','Productos'],['marketplace','Marketplace'],['cats','Secciones'],['car','Carrusel'],['shop','Tienda'],['fotos','Fotos']];
   admEl.innerHTML='<div class="adm-top"><div class="adm-title"><b>Panel</b> T-Niss</div><button class="btn-line" data-act="adm-close">Ver la tienda</button><nav class="adm-tabs" role="tablist">'+
   tabs.map(function(t){return '<button role="tab" aria-selected="'+(adm.tab===t[0])+'" class="adm-tab'+(adm.tab===t[0]?' on':'')+'" data-act="adm-tab" data-v="'+t[0]+'">'+t[1]+'</button>'}).join('')+'</nav></div>'+
   '<div class="adm-body" id="adm-body"><div class="adm-in">'+admTab()+'</div></div><div class="adm-bar" id="adm-bar">'+barHtml()+'</div><div id="adm-modal"></div>';
 }
 function admTab(){
+  if(adm.tab==='marketplace')return admMarketplace();
   if(adm.tab==='cats')return admCats();
   if(adm.tab==='shop')return admShop();
   if(adm.tab==='fotos')return admFotos();
@@ -1244,6 +1247,10 @@ function admList(){
   var a=state.products.filter(function(p){return !q||(p.name+' '+p.brand).toLowerCase().indexOf(q)>=0});
   return a.length?a.map(admRow).join(''):'<p class="note" style="padding:18px">No hay productos con esa búsqueda.</p>';
 }
+function mpSave(){try{localStorage.setItem('tniss_mp_queue',JSON.stringify(mpQueue));localStorage.setItem('tniss_mp_goal',String(mpGoal))}catch(e){toast('No se pudo guardar la cola en este navegador.')}}
+function mpText(p){return p.name+' | '+p.brand+'\nPrecio: '+money(p.price)+' COP\nTallas: '+p.sizeMin+' a '+p.sizeMax+'\n'+(p.desc||'Calzado para dama. Envíos a todo Colombia.')+'\n\nEscríbenos por WhatsApp para confirmar disponibilidad y pedir tu talla.\n'+(pLink(p.id)||'')}
+function mpProducts(){var q=mpSearch.toLowerCase();var a=state.products.filter(function(p){return !q||(p.name+' '+p.brand+' '+catName(p.cat)).toLowerCase().indexOf(q)>=0});if(!q)a=a.slice(0,40);return a.length?a.map(function(p){var queued=mpQueue.indexOf(p.id)>=0;return '<div class="arow"><div class="athumb">'+(isImg(p.img)?'<img src="'+esc(p.img)+'" alt="">':'')+'</div><div class="ainfo"><b>'+esc(p.name)+'</b><span>'+esc(p.brand)+' · '+money(p.price)+' · '+(p.soldout?'AGOTADO':'Tallas '+p.sizeMin+'–'+p.sizeMax)+'</span></div><div class="rest"><button class="btn-line sm" data-act="mp-add" data-id="'+esc(p.id)+'" '+(queued||p.soldout?'disabled':'')+'>'+(queued?'En cola':p.soldout?'Agotado':'Añadir a cola')+'</button></div></div>'}).join(''):'<p class="note" style="padding:18px">No hay productos con esa búsqueda.</p>'}
+function admMarketplace(){var next=byId(mpQueue[0]);return '<div><h2 class="disp">Publicador Marketplace</h2><p class="note">Prepara anuncios desde tu catálogo y lleva una cola local de publicaciones. Cada anuncio queda listo para copiar y publicar manualmente en Facebook Marketplace.</p></div><div class="tool"><b>Meta objetivo diario</b><div class="tool-row"><select class="field" id="mp-goal"><option value="20" '+(mpGoal===20?'selected':'')+'>20 productos / día</option><option value="30" '+(mpGoal===30?'selected':'')+'>30 productos / día</option><option value="40" '+(mpGoal===40?'selected':'')+'>40 productos / día</option><option value="50" '+(mpGoal===50?'selected':'')+'>50 productos / día</option></select><span class="note">En cola: <b>'+mpQueue.length+'</b> · Meta: <b>'+mpGoal+'</b></span></div><p class="note" style="margin-top:10px">La cola se guarda en este navegador. No publica automáticamente ni programa publicaciones.</p></div><div class="tool"><b>'+(next?'Siguiente anuncio: '+esc(next.name):'La cola está vacía')+'</b><div class="tool-row">'+(next?'<button class="btn" data-act="mp-copy"><span>Copiar anuncio siguiente</span></button><button class="btn-line" data-act="mp-done">Marcar como publicado</button>':'<span class="note">Añade productos del catálogo para empezar.</span>')+'</div>'+(next?'<pre class="note" style="white-space:pre-wrap;margin-top:12px">'+esc(mpText(next))+'</pre>':'')+'</div><div><h3 class="disp" style="font-size:1.8rem">Elegir productos</h3><input class="field" id="mp-q" type="search" placeholder="Buscar por nombre, marca o sección" value="'+esc(mpSearch)+'" style="width:100%;margin:12px 0"><div class="alist" id="mp-list">'+mpProducts()+'</div></div><div class="tool"><b>Productos en cola</b><p class="note" style="margin-top:8px">'+(mpQueue.length?mpQueue.map(function(id,i){var p=byId(id);return (i+1)+'. '+(p?esc(p.name):'Producto eliminado')}).join('<br>'):'Todavía no hay anuncios en cola.')+'</p></div>'}
 function admProducts(){
   return '<div><h2 class="disp">Productos</h2><p class="note">Cambia precios al instante, marca lo agotado o lo que sale en vitrina. Nada llega a los clientes hasta que toques “Publicar cambios”.</p></div>'+
   '<div class="atools"><input class="field" id="adm-q" type="search" placeholder="Buscar producto" aria-label="Buscar producto" value="'+esc(adm.q)+'"><button class="btn" data-act="adm-new"><span>Nuevo producto</span></button></div>'+
@@ -1472,6 +1479,9 @@ document.addEventListener('click',function(ev){
   else if(a==='adm-open')openAdmin();
   else if(a==='adm-close')closeAdmin();
   else if(a==='adm-tab'){adm.tab=v;renderAdmin()}
+  else if(a==='mp-add'){if(mpQueue.indexOf(id)<0&&!byId(id).soldout){mpQueue.push(id);mpSave();renderAdmin();toast('Producto agregado a la cola.')}}
+  else if(a==='mp-copy'){var np=byId(mpQueue[0]);if(np){var txt=mpText(np);if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(txt).then(function(){toast('Anuncio copiado. Pégalo en Marketplace.')},function(){toast('No pude copiar automáticamente; selecciona el texto mostrado.')});else toast('Selecciona y copia el texto mostrado.')}}
+  else if(a==='mp-done'){if(mpQueue.length){mpQueue.shift();mpSave();renderAdmin();toast('Marcado como publicado en tu registro local.')}}
   else if(a==='adm-new')openForm(null);
   else if(a==='adm-edit')openForm(id);
   else if(a==='form-close'){adm.edit=null;$('#adm-modal').innerHTML=''}
@@ -1509,6 +1519,7 @@ document.addEventListener('input',function(ev){
   else if(t.id==='f-price'){var mp=maxPriceAll(),val=+t.value;view.maxPrice=val>=mp?null:val;var pv=$('#f-pv');if(pv)pv.textContent=money(val);updateCatalog(true)}
   else if(t.dataset&&t.dataset.hp){var hv=+t.value,hax=t.dataset.hp;state.settings[t.dataset.k+hax]=(hax==='Z')?hv:(100-hv);hpApply(t.dataset.k);touch()}
   else if(t.id==='adm-q'){adm.q=t.value;var l=$('#alist');if(l)l.innerHTML=admList()}
+  else if(t.id==='mp-q'){mpSearch=t.value;var ml=$('#mp-list');if(ml)ml.innerHTML=mpProducts()}
   else if(t.dataset&&t.dataset.bf&&t.type!=='radio'){
     bagForm[t.dataset.bf]=t.value;formSave();syncSend();
     if(bagErr[t.dataset.bf]){delete bagErr[t.dataset.bf];var lb=t.closest('.bf');if(lb)lb.classList.remove('bad');t.setAttribute('aria-invalid','false');var er=$('[data-err="'+t.dataset.bf+'"]',lb||document);if(er)er.hidden=true}
@@ -1516,6 +1527,7 @@ document.addEventListener('input',function(ev){
 });
 document.addEventListener('change',function(ev){
   var t=ev.target;
+  if(t.id==='mp-goal'){mpGoal=+t.value;mpSave();var mpb=$('.adm-in');if(mpb)renderAdmin();return}
   if(t.dataset&&t.dataset.bf==='pay'){bagForm.pay=t.value;formSave();syncSend();delete bagErr.pay;var pf=t.closest('.pay');if(pf){pf.classList.remove('bad');var er=$('[data-err="pay"]',pf);if(er)er.hidden=true}return}
   if(t.id==='f-sort'){view.sort=t.value;updateCatalog(true)}
   else if(t.id==='f-avail'){view.avail=t.checked;updateCatalog(false)}
